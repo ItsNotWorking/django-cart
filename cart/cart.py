@@ -1,13 +1,17 @@
 import datetime
 import models
+from decimal import Decimal, ROUND_05UP
 
 CART_ID = 'CART-ID'
+
 
 class ItemAlreadyExists(Exception):
     pass
 
+
 class ItemDoesNotExist(Exception):
     pass
+
 
 class Cart:
     def __init__(self, request):
@@ -33,12 +37,14 @@ class Cart:
 
     def add(self, product, unit_price, quantity=1):
         try:
-            item = models.Item.objects.get(cart=self.cart, product=product,)
+            item = models.Item.objects.get(cart=self.cart, product=product, )
         except models.Item.DoesNotExist:
             item = models.Item()
             item.cart = self.cart
             item.product = product
             item.unit_price = unit_price
+            item.net_price = Decimal(unit_price / Decimal(1.2)).quantize(Decimal('.01'), rounding=ROUND_05UP)
+            item.tax = item.unit_price - item.net_price
             item.quantity = quantity
             item.save()
         else:
@@ -55,7 +61,7 @@ class Cart:
             raise ItemDoesNotExist
         else:
             item.delete()
-    
+
     def update(self, product, unit_price, quantity):
         try:
             item = models.Item.objects.get(
@@ -65,25 +71,27 @@ class Cart:
             item.cart = self.cart
             item.product = product
             item.unit_price = unit_price
+            item.net_price = Decimal(unit_price / Decimal(1.2)).quantize(Decimal('.01'), rounding=ROUND_05UP)
+            item.tax = item.unit_price - item.net_price
             item.quantity = quantity
-            item.save(force_update = True)
+            item.save(force_update=True)
         except models.Item.DoesNotExist:
             raise ItemDoesNotExist
-    
+
     def clear(self):
         for item in self.cart.item_set.all():
             item.delete()
-    
+
     # There's all sort of info you might want to easily get from your cart
-    
+
     def getQuantity(self, product):
-        try: 
-            item = models.Item.objects.get(cart = self.cart, product = product)
+        try:
+            item = models.Item.objects.get(cart=self.cart, product=product)
             return item.quantity
-            
+
         except models.Item.DoesNotExist:
             raise ItemDoesNotExist
-    
+
     def checkout_cart(self):
         self.cart.checked_out = True
         self.cart.save()
@@ -94,19 +102,20 @@ class Cart:
         for item in self.cart.item_set.all():
             total += item.total_price
         return total
-        
+
     def itemCount(self):
         total = 0
         for item in self.cart.item_set.all():
             total += item.quantity
         return total
-        
+
     def hasItems(self):
         return self.itemCount() > 0
-        
+
+
 def cart_processor(request):
     cart_id = request.session.get(CART_ID)
     if cart_id:
-        return {'cart' : Cart(request),}
+        return {'cart': Cart(request),}
     else:
-        return {'cart' : None,}
+        return {'cart': None,}
